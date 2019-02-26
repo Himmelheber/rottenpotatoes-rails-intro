@@ -1,42 +1,49 @@
-def show
+def movie_params
+    params.require(:movie).permit(:title, :rating, :description, :release_date)
+  end
+
+  def show
     id = params[:id] # retrieve movie ID from URI route
     @movie = Movie.find(id) # look up movie by unique ID
     # will render app/views/movies/show.<extension> by default
   end
-
+        
   def index
-
-    if params[:sort].nil? && params[:ratings].nil? &&
-        (!session[:sort].nil? || !session[:ratings].nil?)
-      redirect_to movies_path(:sort => session[:sort], :ratings => session[:ratings])
+    @all_ratings = Movie.get_ratings()
+    
+    unless params[:ratings].nil?
+        @checked_ratings = params[:ratings]
+        session[:checked_ratings] = @checked_ratings
     end
-
-    @sort = params[:sort]
-    @ratings = params[:ratings] 
-    if @ratings.nil?
-      ratings = Movie.ratings 
+    
+    if params[:sort].nil?
     else
-      ratings = @ratings.keys
+        session[:sort] = params[:sort]
     end
-
-    @all_ratings = Movie.ratings.inject(Hash.new) do |all_ratings, rating|
-          all_ratings[rating] = @ratings.nil? ? false : @ratings.has_key?(rating) 
-          all_ratings
-      end
-      
-    if !@sort.nil?
-      begin
-        @movies = Movie.order("#{@sort} ASC").find_all_by_rating(ratings)
-      rescue ActiveRecord::StatementInvalid
-        flash[:warning] = "Movies cannot be sorted by #{@sort}."
-        @movies = Movie.find_all_by_rating(ratings)
-      end
-    else
-      @movies = Movie.find_all_by_rating(ratings)
+    
+    if params[:sort].nil? && params[:ratings].nil? && session[:checked_ratings]
+        @checked_ratings = session[:checked_ratings]        #basically allocate in memory
+        @sort = session[:sort]      #basically allocate in memory
+        flash.keep      #save to remember!
+        redirect_to movies_path({order_by: @sort, ratings: @checked_ratings})   #will let the checkboxes go back to previous state if none is selected
     end
-
-    session[:sort] = @sort
-    session[:ratings] = @ratings
+    
+    @movies = Movie.all     #default display
+    
+    if session[:checked_ratings]
+        @movies = @movies.select{ |movie| session[:checked_ratings].include? movie.rating}
+    end
+    
+    case session[:sort]
+    when 'title'            #highglights the movie title column when selected
+        @movies = @movies.sort { |a,b| a.title <=> b.title}
+        @movie_highlight = "hilite" #created a class in movies/index.html.haml to use this, 'hilite from default.css'
+    when 'release_date'     #highlights the release date column when selected
+        @movies = @movies.sort { |a,b| a.release_date <=> b.release_date }
+        @release_highlight = "hilite"   #created a class in movies/index.html.haml to use this, 'hilite from default.css'
+    else 
+        session[:sort] == "release_date"
+    end
   end
 
   def new
@@ -44,7 +51,7 @@ def show
   end
 
   def create
-    @movie = Movie.create!(params[:movie])
+    @movie = Movie.create!(movie_params)
     flash[:notice] = "#{@movie.title} was successfully created."
     redirect_to movies_path
   end
@@ -55,7 +62,7 @@ def show
 
   def update
     @movie = Movie.find params[:id]
-    @movie.update_attributes!(params[:movie])
+    @movie.update_attributes!(movie_params)
     flash[:notice] = "#{@movie.title} was successfully updated."
     redirect_to movie_path(@movie)
   end
@@ -66,3 +73,14 @@ def show
     flash[:notice] = "Movie '#{@movie.title}' deleted."
     redirect_to movies_path
   end
+
+end
+
+App -> helpers -> movies_helper.rb
+
+module MoviesHelper
+  # Checks if a number is odd:
+  def oddness(count)
+    count.odd? ?  "odd" :  "even"
+  end
+end
