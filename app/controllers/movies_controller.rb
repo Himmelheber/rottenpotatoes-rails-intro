@@ -37,7 +37,7 @@ class MoviesController < ApplicationController
         @movies = Movie.find_all_by_rating(ratings)
       end
     else
-      @movies = Movie.find_all_by_rating(ratings)
+      @movies = Movie.find_or_create_by(ratings)
     end
 
     session[:sort] = @sort
